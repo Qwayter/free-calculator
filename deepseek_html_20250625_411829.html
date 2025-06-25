@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Advanced Fee Calculator</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --dark: #212529;
+            --light: #f8f9fa;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--light);
+            color: var(--dark);
+        }
+        h1 {
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        input:focus, select:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+        }
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: var(--secondary);
+        }
+        .fee-presets {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .preset-btn {
+            background: white;
+            color: var(--dark);
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 14px;
+        }
+        .preset-btn:hover {
+            border-color: var(--primary);
+        }
+        .preset-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        #result {
+            margin-top: 25px;
+            padding: 20px;
+            background: #e8f4fc;
+            border-radius: 8px;
+            font-size: 18px;
+        }
+        .saved-rates {
+            margin-top: 30px;
+        }
+        .rate-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 15px;
+            }
+            .card {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Advanced Fee Calculator</h1>
+    
+    <div class="card">
+        <div class="input-group">
+            <label for="netAmount">Amount You Want to Receive ($):</label>
+            <input type="number" id="netAmount" placeholder="e.g., 1000.00" step="0.01" min="0">
+        </div>
+        
+        <h3>Select Fee Structure:</h3>
+        <div class="fee-presets">
+            <div class="preset-btn" data-percent="2.9" data-fixed="0.30">Stripe</div>
+            <div class="preset-btn" data-percent="3.5" data-fixed="0.10">Bank</div>
+            <div class="preset-btn" data-percent="4.4" data-fixed="0.30">PayPal</div>
+            <div class="preset-btn" data-percent="1.5" data-fixed="0.25">Square</div>
+            <div class="preset-btn" data-percent="0.0" data-fixed="0.00">Custom</div>
+        </div>
+        
+        <div class="input-group">
+            <label for="feePercent">Fee Percentage (%):</label>
+            <input type="number" id="feePercent" value="3.5" step="0.1" min="0">
+        </div>
+        
+        <div class="input-group">
+            <label for="fixedFee">Fixed Fee ($):</label>
+            <input type="number" id="fixedFee" value="0.10" step="0.01" min="0">
+        </div>
+        
+        <button onclick="calculate()">Calculate Amount to Charge</button>
+        
+        <div id="result"></div>
+    </div>
+    
+    <div class="card saved-rates">
+        <h3>Save Custom Rates</h3>
+        <div class="input-group">
+            <label for="rateName">Rate Name:</label>
+            <input type="text" id="rateName" placeholder="e.g., My Bank">
+        </div>
+        <button onclick="saveRate()">Save This Rate</button>
+        <div id="savedRatesList"></div>
+    </div>
+
+    <script>
+        // Load saved rates from localStorage
+        let savedRates = JSON.parse(localStorage.getItem('savedRates')) || [];
+        
+        // Preset buttons functionality
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Remove active class from all buttons
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
+                // Set values if not "Custom"
+                if (!this.textContent.includes('Custom')) {
+                    document.getElementById('feePercent').value = this.dataset.percent;
+                    document.getElementById('fixedFee').value = this.dataset.fixed;
+                }
+            });
+        });
+        
+        function calculate() {
+            const net = parseFloat(document.getElementById('netAmount').value);
+            const feePercent = parseFloat(document.getElementById('feePercent').value);
+            const fixedFee = parseFloat(document.getElementById('fixedFee').value);
+            
+            if (isNaN(net) || isNaN(feePercent) || isNaN(fixedFee)) {
+                document.getElementById('result').innerHTML = 
+                    '<div style="color:#dc3545;">Please enter valid numbers</div>';
+                return;
+            }
+            
+            const amountToCharge = (net + fixedFee) / (1 - feePercent / 100);
+            const totalFees = amountToCharge - net;
+            
+            document.getElementById('result').innerHTML = `
+                <div style="margin-bottom:10px;">
+                    <strong style="font-size:1.2em;">Charge your client:</strong> 
+                    <span style="color:#2b9348;font-size:1.3em;font-weight:bold;">$${amountToCharge.toFixed(2)}</span>
+                </div>
+                <div style="color:#666;">
+                    <div>Fees deducted: $${totalFees.toFixed(2)}</div>
+                    <div>Breakdown: ${feePercent}% ($${(amountToCharge * feePercent/100).toFixed(2)}) + $${fixedFee.toFixed(2)} fixed</div>
+                </div>
+            `;
+        }
+        
+        function saveRate() {
+            const name = document.getElementById('rateName').value.trim();
+            const percent = document.getElementById('feePercent').value;
+            const fixed = document.getElementById('fixedFee').value;
+            
+            if (!name) {
+                alert('Please enter a name for this rate');
+                return;
+            }
+            
+            const newRate = {
+                name: name,
+                percent: percent,
+                fixed: fixed
+            };
+            
+            savedRates.push(newRate);
+            localStorage.setItem('savedRates', JSON.stringify(savedRates));
+            updateSavedRatesList();
+            document.getElementById('rateName').value = '';
+        }
+        
+        function updateSavedRatesList() {
+            const list = document.getElementById('savedRatesList');
+            list.innerHTML = '';
+            
+            if (savedRates.length === 0) {
+                list.innerHTML = '<p>No saved rates yet</p>';
+                return;
+            }
+            
+            savedRates.forEach((rate, index) => {
+                const item = document.createElement('div');
+                item.className = 'rate-item';
+                item.innerHTML = `
+                    <div>
+                        <strong>${rate.name}</strong><br>
+                        <small>${rate.percent}% + $${rate.fixed}</small>
+                    </div>
+                    <div>
+                        <button onclick="useSavedRate(${index})" style="padding:5px 10px;font-size:12px;">Use</button>
+                        <button onclick="deleteRate(${index})" style="padding:5px 10px;font-size:12px;background:#dc3545;">Delete</button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+        
+        function useSavedRate(index) {
+            const rate = savedRates[index];
+            document.getElementById('feePercent').value = rate.percent;
+            document.getElementById('fixedFee').value = rate.fixed;
+            
+            // Update active preset button
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        }
+        
+        function deleteRate(index) {
+            if (confirm('Delete this rate?')) {
+                savedRates.splice(index, 1);
+                localStorage.setItem('savedRates', JSON.stringify(savedRates));
+                updateSavedRatesList();
+            }
+        }
+        
+        // Initialize
+        updateSavedRatesList();
+    </script>
+</body>
+</html>
